@@ -27,12 +27,12 @@ async function identifyMusic(audioBuffer: Buffer): Promise<any> {
   console.log("RapidAPI key exists:", !!RAPIDAPI_KEY);
   
   if (RAPIDAPI_KEY) {
-    // Try multiple different music identification APIs
+    // Try APIs that support file upload with your RapidAPI subscription
     const apis = [
       {
-        name: "Shazam",
-        url: "https://shazam.p.rapidapi.com/songs/v2/detect",
-        host: "shazam.p.rapidapi.com",
+        name: "Shazam Core",
+        url: "https://shazam-core.p.rapidapi.com/v1/tracks/recognize",
+        host: "shazam-core.p.rapidapi.com",
         processor: (result: any) => {
           if (result?.track) {
             return {
@@ -48,15 +48,15 @@ async function identifyMusic(audioBuffer: Buffer): Promise<any> {
         }
       },
       {
-        name: "Music Recognition",
-        url: "https://shazam-song-recognizer.p.rapidapi.com/recognize/file",
+        name: "Shazam Song Recognition",
+        url: "https://shazam-song-recognizer.p.rapidapi.com/recognize",
         host: "shazam-song-recognizer.p.rapidapi.com",
         processor: (result: any) => {
-          if (result?.result?.track) {
-            const track = result.result.track;
+          if (result?.matches && result.matches.length > 0) {
+            const track = result.matches[0];
             return {
               title: track.title || "Unknown Title",
-              artists: [{ name: track.subtitle || "Unknown Artist" }],
+              artists: [{ name: track.artist || "Unknown Artist" }],
               album: { name: track.album || null },
               release_date: null,
               score: 90,
@@ -67,16 +67,16 @@ async function identifyMusic(audioBuffer: Buffer): Promise<any> {
         }
       },
       {
-        name: "Audio Analysis",
-        url: "https://song-recognizer2.p.rapidapi.com/song/recognize",
-        host: "song-recognizer2.p.rapidapi.com",
+        name: "AudD Recognition",
+        url: "https://audd.p.rapidapi.com/",
+        host: "audd.p.rapidapi.com",
         processor: (result: any) => {
-          if (result?.song) {
+          if (result?.result) {
             return {
-              title: result.song.title || "Unknown Title",
-              artists: [{ name: result.song.artist || "Unknown Artist" }],
-              album: { name: result.song.album || null },
-              release_date: result.song.year || null,
+              title: result.result.title || "Unknown Title",
+              artists: [{ name: result.result.artist || "Unknown Artist" }],
+              album: { name: result.result.album || null },
+              release_date: result.result.release_date || null,
               score: 85,
               external_metadata: { spotify: null }
             };
@@ -103,6 +103,11 @@ async function identifyMusic(audioBuffer: Buffer): Promise<any> {
         const formData = new FormData();
         const audioBlob = new Blob([processedBuffer], { type: "audio/mpeg" });
         formData.append("file", audioBlob, "audio.mp3");
+        
+        // Add API token for AudD if needed
+        if (api.name === "AudD Recognition") {
+          formData.append("api_token", RAPIDAPI_KEY);
+        }
 
         const response = await fetch(api.url, {
           method: "POST",
