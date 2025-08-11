@@ -7,9 +7,13 @@ interface RecentHistoryProps {
 }
 
 export default function RecentHistory({ identifications }: RecentHistoryProps) {
-  const formatTimeAgo = (date: Date) => {
+  const formatTimeAgo = (date: Date | string | null) => {
+    if (!date) return "unknown";
+    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    if (!(dateObj instanceof Date) || isNaN(dateObj.getTime())) return "unknown";
+    
     const now = new Date();
-    const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
+    const diffInMinutes = Math.floor((now.getTime() - dateObj.getTime()) / (1000 * 60));
     
     if (diffInMinutes < 1) return "just now";
     if (diffInMinutes < 60) return `${diffInMinutes}m ago`;

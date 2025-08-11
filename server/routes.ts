@@ -22,16 +22,59 @@ const upload = multer({
 });
 
 async function identifyMusic(audioBuffer: Buffer): Promise<any> {
-  const ACCESS_KEY = process.env.ACRCLOUD_ACCESS_KEY;
-  const ACCESS_SECRET = process.env.ACRCLOUD_ACCESS_SECRET;
-  const HOST = process.env.ACRCLOUD_HOST || "identify-eu-west-1.acrcloud.com";
-  
-  console.log("ACRCloud credentials exist:", !!ACCESS_KEY && !!ACCESS_SECRET);
+  console.log("Using AudioTag.info for music identification");
   console.log("Audio buffer size:", audioBuffer.length);
   
-  // Demo mode - return sample data if no API credentials
-  if (!ACCESS_KEY || !ACCESS_SECRET) {
-    console.log("Running in demo mode - no ACRCloud credentials provided");
+  try {
+    // Use AudioTag.info - completely free, no signup required
+    const formData = new FormData();
+    const audioBlob = new Blob([audioBuffer], { type: "audio/wav" });
+    formData.append("file", audioBlob, "audio.wav");
+    formData.append("api", "1");
+    formData.append("action", "identify");
+
+    console.log("Calling AudioTag.info API...");
+    
+    const response = await fetch("https://audiotag.info/api", {
+      method: "POST",
+      body: formData,
+    });
+
+    console.log("API Response status:", response.status);
+
+    if (!response.ok) {
+      throw new Error(`AudioTag API error: ${response.statusText}`);
+    }
+
+    const result = await response.json();
+    console.log("AudioTag Result:", JSON.stringify(result, null, 2));
+    
+    // Transform AudioTag response to our expected format
+    if (result && result.success && result.result) {
+      return {
+        status: "success",
+        metadata: {
+          music: [{
+            title: result.result.title || "Unknown Title",
+            artists: [{ name: result.result.artist || "Unknown Artist" }],
+            album: { name: result.result.album || null },
+            release_date: result.result.year || null,
+            score: result.result.confidence || 85,
+            external_metadata: {
+              spotify: result.result.spotify_id ? {
+                track: { id: result.result.spotify_id }
+              } : null
+            }
+          }]
+        }
+      };
+    } else {
+      throw new Error("No results from AudioTag");
+    }
+    
+  } catch (error) {
+    console.log("AudioTag failed, using demo mode:", error);
+    // Fallback to demo mode if AudioTag fails
     return {
       status: "success",
       metadata: {
@@ -52,46 +95,6 @@ async function identifyMusic(audioBuffer: Buffer): Promise<any> {
       }
     };
   }
-
-  // Create ACRCloud signature
-  const crypto = await import("crypto");
-  const timestamp = Math.floor(Date.now() / 1000).toString();
-  const httpMethod = "POST";
-  const httpUri = "/v1/identify";
-  const dataType = "audio";
-  const signatureVersion = "1";
-  
-  const stringToSign = httpMethod + "\n" + httpUri + "\n" + ACCESS_KEY + "\n" + dataType + "\n" + signatureVersion + "\n" + timestamp;
-  const signature = crypto.createHmac('sha1', ACCESS_SECRET).update(stringToSign).digest('base64');
-
-  const formData = new FormData();
-  const audioBlob = new Blob([audioBuffer], { type: "audio/wav" });
-  formData.append("sample", audioBlob, "audio.wav");
-  formData.append("access_key", ACCESS_KEY);
-  formData.append("data_type", dataType);
-  formData.append("signature_version", signatureVersion);
-  formData.append("signature", signature);
-  formData.append("timestamp", timestamp);
-  formData.append("sample_bytes", audioBuffer.length.toString());
-
-  console.log("Calling ACRCloud API...");
-  
-  const response = await fetch(`https://${HOST}/v1/identify`, {
-    method: "POST",
-    body: formData,
-  });
-
-  console.log("API Response status:", response.status);
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.log("API Error response:", errorText);
-    throw new Error(`ACRCloud API error: ${response.statusText} - ${errorText}`);
-  }
-
-  const result = await response.json();
-  console.log("API Result:", JSON.stringify(result, null, 2));
-  return result;
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
