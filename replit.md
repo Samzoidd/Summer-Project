@@ -45,10 +45,15 @@ Preferred communication style: Simple, everyday language.
 ## External Dependencies
 
 ### Music Recognition Service
-- **Primary API**: AudD.io music identification service for audio fingerprinting and song recognition
-- **Configuration**: API key-based authentication via environment variables
-- **File Processing**: Supports various audio formats with automatic format conversion
-- **Response Data**: Rich metadata including streaming links, album art, and detailed song information
+- **Implementation**: Multi-tier API system with fallback support for maximum reliability
+- **Primary APIs**: 
+  - Shazam Core API (shazam-core.p.rapidapi.com) - File upload support
+  - Shazam Song Recognition API (shazam-song-recognizer.p.rapidapi.com) - Alternative endpoint
+  - AudD Recognition API (audd.p.rapidapi.com) - Backup service
+- **Configuration**: RapidAPI key-based authentication via RAPIDAPI_KEY environment variable
+- **File Processing**: Direct audio file upload with automatic size optimization (800KB max per API)
+- **Audio Optimization**: Takes samples from 1/3 into songs for better recognition accuracy
+- **Response Data**: Comprehensive song metadata including title, artist, album, release date, and confidence scores
 
 ### Database Service
 - **Provider**: Neon Database (serverless PostgreSQL)
