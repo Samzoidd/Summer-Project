@@ -43,9 +43,9 @@ async function identifyMusic(audioBuffer: Buffer): Promise<any> {
 
       const formData = new FormData();
       const audioBlob = new Blob([processedBuffer], { type: "audio/mpeg" });
-      formData.append("upload_file", audioBlob, "audio.mp3");
+      formData.append("file", audioBlob, "audio.mp3");
 
-      const response = await fetch("https://shazam-core.p.rapidapi.com/v1/tracks/recognize", {
+      const response = await fetch("https://shazam-core.p.rapidapi.com/v1/songs/detect", {
         method: "POST",
         headers: {
           "X-RapidAPI-Key": RAPIDAPI_KEY,
