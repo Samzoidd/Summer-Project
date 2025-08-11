@@ -1,14 +1,18 @@
-import type { Express } from "express";
+import type { Express, Request } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertSongSchema, insertIdentificationSchema } from "@shared/schema";
 import multer from "multer";
 import { z } from "zod";
 
+interface MulterRequest extends Request {
+  file?: Express.Multer.File;
+}
+
 const upload = multer({
   dest: "uploads/",
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
-  fileFilter: (req, file, cb) => {
+  fileFilter: (req: any, file: any, cb: any) => {
     if (file.mimetype.startsWith("audio/")) {
       cb(null, true);
     } else {
@@ -45,7 +49,7 @@ async function identifyMusic(audioBuffer: Buffer): Promise<any> {
 export async function registerRoutes(app: Express): Promise<Server> {
   
   // Upload and identify music
-  app.post("/api/identify", upload.single("audio"), async (req, res) => {
+  app.post("/api/identify", upload.single("audio"), async (req: MulterRequest, res) => {
     try {
       if (!req.file) {
         return res.status(400).json({ message: "No audio file provided" });
@@ -59,10 +63,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Identify the music
         const identificationResult = await identifyMusic(audioBuffer);
         
-        if (!identificationResult.status === "success" || !identificationResult.result) {
+        if (identificationResult.status !== "success" || !identificationResult.result) {
           return res.status(404).json({ 
             message: "Song not identified", 
-            error: "No match found in database" 
+            error: "No match found in database. Try uploading a popular song with clear audio quality." 
           });
         }
 

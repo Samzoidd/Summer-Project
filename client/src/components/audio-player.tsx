@@ -41,9 +41,12 @@ export default function AudioPlayer({
     },
     onError: (error: any) => {
       console.error("Identification failed:", error);
+      const isNoMatch = error.message?.includes("No match found");
       toast({
-        title: "Identification Failed",
-        description: error.message || "Could not identify the song. Please try again.",
+        title: isNoMatch ? "Song Not Found" : "Identification Failed",
+        description: isNoMatch 
+          ? "Try uploading a popular song with clear audio quality. Works best with commercial music releases."
+          : error.message || "Could not identify the song. Please try again.",
         variant: "destructive",
       });
     },
