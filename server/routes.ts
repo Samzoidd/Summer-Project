@@ -22,46 +22,61 @@ const upload = multer({
 });
 
 async function identifyMusic(audioBuffer: Buffer): Promise<any> {
-  const API_KEY = process.env.AUDD_API_KEY || process.env.MUSIC_API_KEY || "";
+  const ACCESS_KEY = process.env.ACRCLOUD_ACCESS_KEY;
+  const ACCESS_SECRET = process.env.ACRCLOUD_ACCESS_SECRET;
+  const HOST = process.env.ACRCLOUD_HOST || "identify-eu-west-1.acrcloud.com";
   
-  console.log("API Key exists:", !!API_KEY);
+  console.log("ACRCloud credentials exist:", !!ACCESS_KEY && !!ACCESS_SECRET);
   console.log("Audio buffer size:", audioBuffer.length);
   
-  // Demo mode - return sample data if no API key
-  if (!API_KEY) {
-    console.log("Running in demo mode - no API key provided");
+  // Demo mode - return sample data if no API credentials
+  if (!ACCESS_KEY || !ACCESS_SECRET) {
+    console.log("Running in demo mode - no ACRCloud credentials provided");
     return {
       status: "success",
-      result: {
-        title: "Blinding Lights",
-        artist: "The Weeknd",
-        album: "After Hours",
-        release_date: "2019-11-29",
-        score: 95,
-        spotify: {
-          external_urls: {
-            spotify: "https://open.spotify.com/track/0VjIjW4GlULA1OgON3MzNs"
-          },
-          album: {
-            images: [
-              {
-                url: "https://i.scdn.co/image/ab67616d0000b273c2b5ea4a06e0daeb2a172b3b"
+      metadata: {
+        music: [{
+          title: "Blinding Lights",
+          artists: [{ name: "The Weeknd" }],
+          album: { name: "After Hours" },
+          release_date: "2019-11-29",
+          score: 95,
+          external_metadata: {
+            spotify: {
+              track: {
+                id: "0VjIjW4GlULA1OgON3MzNs"
               }
-            ]
+            }
           }
-        }
+        }]
       }
     };
   }
 
+  // Create ACRCloud signature
+  const crypto = await import("crypto");
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const httpMethod = "POST";
+  const httpUri = "/v1/identify";
+  const dataType = "audio";
+  const signatureVersion = "1";
+  
+  const stringToSign = httpMethod + "\n" + httpUri + "\n" + ACCESS_KEY + "\n" + dataType + "\n" + signatureVersion + "\n" + timestamp;
+  const signature = crypto.createHmac('sha1', ACCESS_SECRET).update(stringToSign).digest('base64');
+
   const formData = new FormData();
   const audioBlob = new Blob([audioBuffer], { type: "audio/wav" });
-  formData.append("file", audioBlob, "audio.wav");
-  formData.append("api_token", API_KEY);
+  formData.append("sample", audioBlob, "audio.wav");
+  formData.append("access_key", ACCESS_KEY);
+  formData.append("data_type", dataType);
+  formData.append("signature_version", signatureVersion);
+  formData.append("signature", signature);
+  formData.append("timestamp", timestamp);
+  formData.append("sample_bytes", audioBuffer.length.toString());
 
-  console.log("Calling AudD.io API...");
+  console.log("Calling ACRCloud API...");
   
-  const response = await fetch("https://api.audd.io/", {
+  const response = await fetch(`https://${HOST}/v1/identify`, {
     method: "POST",
     body: formData,
   });
@@ -71,11 +86,11 @@ async function identifyMusic(audioBuffer: Buffer): Promise<any> {
   if (!response.ok) {
     const errorText = await response.text();
     console.log("API Error response:", errorText);
-    throw new Error(`Music identification API error: ${response.statusText} - ${errorText}`);
+    throw new Error(`ACRCloud API error: ${response.statusText} - ${errorText}`);
   }
 
   const result = await response.json();
-  console.log("API Result:", result);
+  console.log("API Result:", JSON.stringify(result, null, 2));
   return result;
 }
 
@@ -98,7 +113,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         console.log("API Response:", JSON.stringify(identificationResult, null, 2));
         
-        if (identificationResult.status !== "success" || !identificationResult.result) {
+        if (identificationResult.status !== "success" || !identificationResult.metadata?.music?.[0]) {
           return res.status(404).json({ 
             message: "Song not identified", 
             error: "No match found in database. Try uploading a popular song with clear audio quality.",
@@ -106,19 +121,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         }
 
-        const musicData = identificationResult.result;
+        const musicData = identificationResult.metadata.music[0];
         
         // Create song record
         const songData = {
           title: musicData.title || "Unknown Title",
-          artist: musicData.artist || "Unknown Artist",
-          album: musicData.album || null,
+          artist: musicData.artists?.[0]?.name || "Unknown Artist",
+          album: musicData.album?.name || null,
           year: musicData.release_date ? new Date(musicData.release_date).getFullYear() : null,
           genre: null,
-          duration: musicData.song_link ? null : null,
-          spotifyUrl: musicData.spotify?.external_urls?.spotify || null,
+          duration: null,
+          spotifyUrl: musicData.external_metadata?.spotify?.track?.id ? 
+            `https://open.spotify.com/track/${musicData.external_metadata.spotify.track.id}` : null,
           youtubeUrl: null,
-          albumArt: musicData.spotify?.album?.images?.[0]?.url || null,
+          albumArt: null,
         };
 
         const song = await storage.createSong(songData);
@@ -127,7 +143,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const identification = await storage.createIdentification({
           songId: song.id,
           filename: req.file.originalname,
-          confidence: (identificationResult.result?.score || 0.9) * 100,
+          confidence: musicData.score || 95,
         });
 
         const result = await storage.getIdentificationWithSong(identification.id);
