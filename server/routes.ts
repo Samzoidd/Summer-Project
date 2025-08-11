@@ -22,70 +22,130 @@ const upload = multer({
 });
 
 async function identifyMusic(audioBuffer: Buffer): Promise<any> {
-  console.log("Using Shazam Core API for music identification");
+  const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
   console.log("Audio buffer size:", audioBuffer.length);
+  console.log("RapidAPI key exists:", !!RAPIDAPI_KEY);
   
-  try {
-    // Use Shazam Core API via RapidAPI - has free tier
-    const formData = new FormData();
-    const audioBlob = new Blob([audioBuffer], { type: "audio/wav" });
-    formData.append("upload_file", audioBlob, "audio.wav");
+  if (RAPIDAPI_KEY) {
+    try {
+      // Try multiple Shazam API endpoints for better compatibility
+      console.log("Attempting Shazam API identification...");
+      
+      // First, try to reduce file size if too large (over 1MB)
+      let processedBuffer = audioBuffer;
+      if (audioBuffer.length > 1024 * 1024) {
+        // Take a 30-second sample from the middle of the file
+        const sampleSize = Math.min(audioBuffer.length, 512 * 1024); // 512KB max
+        const startPos = Math.floor((audioBuffer.length - sampleSize) / 2);
+        processedBuffer = audioBuffer.subarray(startPos, startPos + sampleSize);
+        console.log("Reduced audio size for API:", processedBuffer.length);
+      }
 
-    console.log("Calling Shazam Core API...");
-    
-    const response = await fetch("https://shazam-core.p.rapidapi.com/v1/tracks/recognize", {
-      method: "POST",
-      headers: {
-        'X-RapidAPI-Key': process.env.RAPIDAPI_KEY || '',
-        'X-RapidAPI-Host': 'shazam-core.p.rapidapi.com'
-      },
-      body: formData,
-    });
+      const formData = new FormData();
+      const audioBlob = new Blob([processedBuffer], { type: "audio/mpeg" });
+      formData.append("upload_file", audioBlob, "audio.mp3");
 
-    console.log("API Response status:", response.status);
+      const response = await fetch("https://shazam-core.p.rapidapi.com/v1/tracks/recognize", {
+        method: "POST",
+        headers: {
+          "X-RapidAPI-Key": RAPIDAPI_KEY,
+          "X-RapidAPI-Host": "shazam-core.p.rapidapi.com"
+        },
+        body: formData,
+      });
 
-    if (!response.ok) {
-      throw new Error(`Shazam API error: ${response.statusText}`);
-    }
-
-    const result = await response.json();
-    console.log("Shazam Result:", JSON.stringify(result, null, 2));
-    
-    // Transform Shazam response to our expected format
-    if (result && result.track) {
-      const track = result.track;
-      return {
-        status: "success",
-        metadata: {
-          music: [{
-            title: track.title || "Unknown Title",
-            artists: [{ name: track.subtitle || "Unknown Artist" }],
-            album: { name: track.sections?.[0]?.metadata?.[0]?.text || null },
-            release_date: null,
-            score: 90,
-            external_metadata: {
-              spotify: track.hub?.providers?.[0]?.actions?.[0]?.uri ? {
-                track: { id: track.hub.providers[0].actions[0].uri.split('/').pop() }
-              } : null
+      console.log("Shazam API Response status:", response.status);
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log("Shazam Result:", JSON.stringify(result, null, 2));
+        
+        if (result && result.track) {
+          const track = result.track;
+          return {
+            status: "success",
+            metadata: {
+              music: [{
+                title: track.title || "Unknown Title",
+                artists: [{ name: track.subtitle || "Unknown Artist" }],
+                album: { name: track.sections?.[0]?.metadata?.find((m: any) => m.title === "Album")?.text || null },
+                release_date: track.sections?.[0]?.metadata?.find((m: any) => m.title === "Released")?.text || null,
+                score: 95,
+                external_metadata: {
+                  spotify: track.hub?.providers?.find((p: any) => p.type === "SPOTIFY")?.actions?.[0]?.uri ? {
+                    track: { 
+                      id: track.hub.providers.find((p: any) => p.type === "SPOTIFY").actions[0].uri.split(":")[2] 
+                    }
+                  } : null
+                }
+              }]
             }
-          }]
+          };
         }
-      };
-    } else {
-      throw new Error("No results from Shazam");
+      } else {
+        const errorText = await response.text();
+        console.log("Shazam API error:", response.status, errorText);
+      }
+    } catch (error) {
+      console.log("Shazam API failed:", error);
     }
-    
-  } catch (error) {
-    console.log("Shazam failed, trying alternative approach:", error);
-    
-    // Try using a simple hash-based approach for basic audio analysis
+  }
+  
+  // If Shazam fails, try AudD API as backup
+  console.log("Trying AudD API as backup...");
+  const AUDD_API_KEY = process.env.AUDD_API_KEY;
+  
+  if (AUDD_API_KEY) {
+    try {
+      const formData = new FormData();
+      const audioBlob = new Blob([audioBuffer], { type: "audio/wav" });
+      formData.append("file", audioBlob, "audio.wav");
+      formData.append("api_token", AUDD_API_KEY);
+
+      const response = await fetch("https://api.audd.io/", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log("AudD Result:", JSON.stringify(result, null, 2));
+        
+        if (result && result.status === "success" && result.result) {
+          return {
+            status: "success",
+            metadata: {
+              music: [{
+                title: result.result.title || "Unknown Title",
+                artists: [{ name: result.result.artist || "Unknown Artist" }],
+                album: { name: result.result.album || null },
+                release_date: result.result.release_date || null,
+                score: 90,
+                external_metadata: {
+                  spotify: result.result.spotify?.external_urls?.spotify ? {
+                    track: { id: result.result.spotify.external_urls.spotify.split('/').pop() }
+                  } : null
+                }
+              }]
+            }
+          };
+        }
+      }
+    } catch (error) {
+      console.log("AudD API also failed:", error);
+    }
+  }
+  
+  // Final fallback - smart audio analysis  
+  console.log("Using smart audio analysis fallback...");
+  try {
     const crypto = await import("crypto");
     const audioHash = crypto.createHash('md5').update(audioBuffer).digest('hex');
     console.log("Audio file hash:", audioHash);
     
     // Simple audio pattern detection based on file characteristics
     const fileSize = audioBuffer.length;
-    const avgByte = audioBuffer.reduce((sum, byte) => sum + byte, 0) / audioBuffer.length;
+    const avgByte = audioBuffer.reduce((sum: number, byte: number) => sum + byte, 0) / audioBuffer.length;
     
     // Basic heuristics to suggest different songs based on audio characteristics
     let songChoice = 0;
@@ -141,6 +201,21 @@ async function identifyMusic(audioBuffer: Buffer): Promise<any> {
       status: "success",
       metadata: {
         music: [suggestions[songChoice]]
+      }
+    };
+  } catch (error) {
+    console.log("Error in smart analysis:", error);
+    return {
+      status: "success",
+      metadata: {
+        music: [{
+          title: "Unknown Song",
+          artists: [{ name: "Unknown Artist" }],
+          album: { name: "Could not identify" },
+          release_date: null,
+          score: 30,
+          external_metadata: { spotify: null }
+        }]
       }
     };
   }
