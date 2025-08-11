@@ -42,7 +42,7 @@ export default function Home() {
                 <Music className="text-white text-lg" size={20} />
               </div>
               <h1 className="text-2xl font-bold bg-gradient-to-r from-spotify-green to-coral bg-clip-text text-transparent">
-                SoundScout
+                AudioHuzz
               </h1>
             </div>
             <nav className="hidden md:flex items-center space-x-8">
@@ -103,7 +103,7 @@ export default function Home() {
         {/* Features Section */}
         <section className="mt-16 mb-12">
           <h3 className="text-3xl font-bold text-center mb-12 bg-gradient-to-r from-purple-400 to-coral bg-clip-text text-transparent">
-            Why Choose SoundScout?
+            Why Choose AudioHuzz?
           </h3>
           <div className="grid md:grid-cols-3 gap-8">
             <div className="text-center p-6">
@@ -139,7 +139,7 @@ export default function Home() {
               <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-blue-500 rounded-full flex items-center justify-center">
                 <Music className="text-white text-sm" size={16} />
               </div>
-              <span className="text-gray-400">© 2024 SoundScout. All rights reserved.</span>
+              <span className="text-gray-400">© 2024 AudioHuzz. All rights reserved.</span>
             </div>
             <div className="flex space-x-6 text-sm text-gray-400">
               <a href="#" className="hover:text-white transition-colors">Privacy</a>

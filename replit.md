@@ -1,8 +1,8 @@
-# SoundScout - Music Identification Application
+# AudioHuzz - Music Identification Application
 
 ## Overview
 
-SoundScout is a full-stack music identification application that allows users to upload audio files and receive detailed song information including artist, album, streaming links, and more. The application uses external music recognition APIs to analyze audio files and provides a modern web interface for user interaction.
+AudioHuzz is a full-stack music identification application that allows users to upload audio files and receive detailed song information including artist, album, streaming links, and more. The application uses external music recognition APIs to analyze audio files and provides a modern web interface for user interaction.
 
 ## User Preferences
 
