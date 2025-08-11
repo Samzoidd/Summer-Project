@@ -24,6 +24,9 @@ const upload = multer({
 async function identifyMusic(audioBuffer: Buffer): Promise<any> {
   const API_KEY = process.env.AUDD_API_KEY || process.env.MUSIC_API_KEY || "";
   
+  console.log("API Key exists:", !!API_KEY);
+  console.log("Audio buffer size:", audioBuffer.length);
+  
   if (!API_KEY) {
     throw new Error("Music identification API key not configured");
   }
@@ -33,16 +36,24 @@ async function identifyMusic(audioBuffer: Buffer): Promise<any> {
   formData.append("file", audioBlob, "audio.wav");
   formData.append("api_token", API_KEY);
 
+  console.log("Calling AudD.io API...");
+  
   const response = await fetch("https://api.audd.io/", {
     method: "POST",
     body: formData,
   });
 
+  console.log("API Response status:", response.status);
+  console.log("API Response headers:", Object.fromEntries(response.headers.entries()));
+
   if (!response.ok) {
-    throw new Error(`Music identification API error: ${response.statusText}`);
+    const errorText = await response.text();
+    console.log("API Error response:", errorText);
+    throw new Error(`Music identification API error: ${response.statusText} - ${errorText}`);
   }
 
   const result = await response.json();
+  console.log("API Result:", result);
   return result;
 }
 
@@ -63,10 +74,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Identify the music
         const identificationResult = await identifyMusic(audioBuffer);
         
+        console.log("API Response:", JSON.stringify(identificationResult, null, 2));
+        
         if (identificationResult.status !== "success" || !identificationResult.result) {
           return res.status(404).json({ 
             message: "Song not identified", 
-            error: "No match found in database. Try uploading a popular song with clear audio quality." 
+            error: "No match found in database. Try uploading a popular song with clear audio quality.",
+            apiResponse: identificationResult
           });
         }
 
