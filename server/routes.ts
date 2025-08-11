@@ -27,8 +27,31 @@ async function identifyMusic(audioBuffer: Buffer): Promise<any> {
   console.log("API Key exists:", !!API_KEY);
   console.log("Audio buffer size:", audioBuffer.length);
   
+  // Demo mode - return sample data if no API key
   if (!API_KEY) {
-    throw new Error("Music identification API key not configured");
+    console.log("Running in demo mode - no API key provided");
+    return {
+      status: "success",
+      result: {
+        title: "Blinding Lights",
+        artist: "The Weeknd",
+        album: "After Hours",
+        release_date: "2019-11-29",
+        score: 95,
+        spotify: {
+          external_urls: {
+            spotify: "https://open.spotify.com/track/0VjIjW4GlULA1OgON3MzNs"
+          },
+          album: {
+            images: [
+              {
+                url: "https://i.scdn.co/image/ab67616d0000b273c2b5ea4a06e0daeb2a172b3b"
+              }
+            ]
+          }
+        }
+      }
+    };
   }
 
   const formData = new FormData();
@@ -44,7 +67,6 @@ async function identifyMusic(audioBuffer: Buffer): Promise<any> {
   });
 
   console.log("API Response status:", response.status);
-  console.log("API Response headers:", Object.fromEntries(response.headers.entries()));
 
   if (!response.ok) {
     const errorText = await response.text();
