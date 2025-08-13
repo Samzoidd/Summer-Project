@@ -42,7 +42,7 @@ export default function Home() {
                 <Music className="text-white text-lg" size={20} />
               </div>
               <h1 className="text-2xl font-bold bg-gradient-to-r from-spotify-green to-coral bg-clip-text text-transparent">
-                AudioHuzz
+                AudiHuzz
               </h1>
             </div>
             <nav className="hidden md:flex items-center space-x-8">
